@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'screens/game_screen.dart';
 
 void main() {
   runApp(const MemoryGameApp());
@@ -17,15 +18,7 @@ class MemoryGameApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightBlue),
         useMaterial3: true,
       ),
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text("Memoria 6x6"),
-          // 2. CAMBIO AQUÍ: El color de la barra
-          backgroundColor: Colors.lightBlue, 
-          foregroundColor: Colors.white, // Letras blancas
-        ),
-        body: const Center(child: Text("Tablero de Juego")),
-      ),
+      home: const GameScreen(),
     );
   }
 }
