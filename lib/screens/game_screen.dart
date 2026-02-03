@@ -15,6 +15,13 @@ class _GameScreenState extends State<GameScreen> {
 // Variables para la lógica del juego
   List<int> flippedIndices = []; // Guarda cuáles cartas están boca arriba
   bool isProcessing = false;     // Bloquea la pantalla mientras espera
+
+  int attempts = 0;          // Contador de intentos
+  int matchedPairs = 0;      // Para saber cuándo llegamos a 18
+  int secondsElapsed = 0;    // El reloj
+  Timer? gameTimer;          // El motor del tiempo
+  bool gameStarted = false;  // Para que el tiempo no corra solo
+
   @override
   void initState() {
     super.initState();
@@ -38,9 +45,7 @@ class _GameScreenState extends State<GameScreen> {
 
     // 4. Creamos las 36 "tarjetas" usando el molde GameCard
     setState(() {
-      flippedIndices.clear();
-      isProcessing = false;
-      
+      _resetStats();
       cards = List.generate(36, (index) {
         return GameCard(
           id: index,
@@ -52,108 +57,182 @@ class _GameScreenState extends State<GameScreen> {
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      // Usamos el color celeste del tema
-      backgroundColor: Colors.blue.shade50, 
-      appBar: AppBar(
-        title: const Text("Memory's Den"),
-        actions: [
-          // Botón para reiniciar (útil para pruebas)
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _initializeGame,
-          ),
-        ],
-      ),
-      
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: AspectRatio(
-            //Fuerza un tablero cuadrado
-            aspectRatio: 1,
-            child: GridView.builder(
-              // Bloqueamos el scroll porque va a caber perfecto
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 6, // 6 columnas
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-                childAspectRatio: 1, //Cartas cuadradas
-              ),
-              itemCount: cards.length,
-              itemBuilder: (context, index) {
-                return _buildCardItem(index);
-              },
-            ),
-          ),
-        ),
-      ),
-    );
+  void _resetStats() {
+    gameTimer?.cancel();
+    attempts = 0;
+    secondsElapsed = 0;
+    matchedPairs = 0;
+    gameStarted = false;
+    flippedIndices.clear();
+    isProcessing = false;
   }
 
-void _onCardTap(int index) {
-    // Si está pensando, o la carta ya está volteada/emparejada, no hacemos nada
+  void startTimer() {
+    gameTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        secondsElapsed++;
+      });
+    });
+  }
+
+  void _onCardTap(int index) {
     if (isProcessing || cards[index].isFlipped || cards[index].isMatched) return;
 
+    // Si es el primer click de la partida, arranca el cronómetro
+    if (!gameStarted) {
+      gameStarted = true;
+      startTimer();
+    }
+
     setState(() {
-      cards[index].isFlipped = true; // Volteamos la carta
-      flippedIndices.add(index);     // La anotamos
+      cards[index].isFlipped = true;
+      flippedIndices.add(index);
     });
 
-    // Si ya hay 2 cartas levantadas, verificamos
     if (flippedIndices.length == 2) {
-      isProcessing = true; // Bloqueamos la pantalla
+      setState(() => attempts++); // Sumamos un intento
+      isProcessing = true;
       _checkForMatch();
     }
   }
 
   void _checkForMatch() async {
-    // Esperamos 1 segundo
     await Future.delayed(const Duration(seconds: 1));
 
     int index1 = flippedIndices[0];
     int index2 = flippedIndices[1];
 
-    // Comparamos el contenido
     if (cards[index1].content == cards[index2].content) {
-      //SON PAREJA
       setState(() {
         cards[index1].isMatched = true;
         cards[index2].isMatched = true;
+        matchedPairs++;
       });
+
+      // SISTEMA DE VICTORIA (18 parejas para un 6x6)
+      if (matchedPairs == 18) {
+        gameTimer?.cancel(); // Detenemos el reloj
+        _showVictoryDialog();
+      }
     } else {
-      // FALLASTE (Las escondemos)
       setState(() {
         cards[index1].isFlipped = false;
         cards[index2].isFlipped = false;
       });
     }
 
-    // Limpiamos para el siguiente turno
     flippedIndices.clear();
     isProcessing = false;
   }
 
-  // Esta función dibuja cada cuadrito individual
-  Widget _buildCardItem(int index) {
-    GameCard card = cards[index]; 
+  // Aqui creamos la interfaz de usuario
 
-    // PARTE 1: Decidimos el color con calma aquí arriba
-    Color cardColor;
-    if (card.isFlipped || card.isMatched) {
-      cardColor = Colors.white;
-    } else {
-      cardColor = Colors.lightBlue;
-    }
+  void _showVictoryDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text("¡Victoria! 🎉", textAlign: TextAlign.center),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Has encontrado todas las parejas."),
+            const SizedBox(height: 10),
+            Text("Intentos: $attempts", style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text("Tiempo: $secondsElapsed segundos", style: const TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _initializeGame();
+            },
+            child: const Text("Jugar de nuevo"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.blue.shade50,
+      appBar: AppBar(
+        title: const Text("Memory's Den"),
+        centerTitle: true,
+        elevation: 2,
+      ),
+      body: Column(
+        children: [
+          // FILA DE ESTADÍSTICAS (Puntos 1 y 2 del plan)
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildStatBox("Intentos", attempts.toString(), Icons.touch_app),
+                _buildStatBox("Tiempo", "${secondsElapsed}s", Icons.timer),
+              ],
+            ),
+          ),
+          // TABLERO
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: GridView.builder(
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 6,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                  ),
+                  itemCount: cards.length,
+                  itemBuilder: (context, index) => _buildCardItem(index),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatBox(String label, String value, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.blue),
+          const SizedBox(width: 8),
+          Column(
+            children: [
+              Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardItem(int index) {
+    GameCard card = cards[index];
+    bool isVisible = card.isFlipped || card.isMatched;
 
     return GestureDetector(
       onTap: () => _onCardTap(index),
       child: Container(
         decoration: BoxDecoration(
-          color: cardColor, // PARTE 2: Aquí solo usamos el resultado
+          color: isVisible ? Colors.white : Colors.lightBlue,
           borderRadius: BorderRadius.circular(8),
           boxShadow: [
             BoxShadow(
@@ -164,8 +243,8 @@ void _onCardTap(int index) {
           ],
         ),
         child: Center(
-          child: (card.isFlipped || card.isMatched)
-              ? Text(card.content, style: const TextStyle(fontSize: 24))
+          child: isVisible
+              ? Text(card.content, style: const TextStyle(fontSize: 22))
               : const SizedBox(),
         ),
       ),
