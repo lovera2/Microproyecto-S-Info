@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/game_card.dart'; // Importamos tu modelo (El molde)
+import '../models/game_card.dart'; // Importamos el molde
+import 'dart:async'; // lo utilizaremos para esperar 1 seg antes de voltear las cartas again 
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -11,7 +12,9 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   // Aquí guardaremos las 36 cartas en memoria
   List<GameCard> cards = [];
-
+// Variables para la lógica del juego
+  List<int> flippedIndices = []; // Guarda cuáles cartas están boca arriba
+  bool isProcessing = false;     // Bloquea la pantalla mientras espera
   @override
   void initState() {
     super.initState();
@@ -33,8 +36,11 @@ class _GameScreenState extends State<GameScreen> {
     // 3. Barajamos las cartas
     deck.shuffle();
 
-    // 4. Creamos las 36 "galletas" usando tu molde GameCard
+    // 4. Creamos las 36 "tarjetas" usando el molde GameCard
     setState(() {
+      flippedIndices.clear();
+      isProcessing = false;
+      
       cards = List.generate(36, (index) {
         return GameCard(
           id: index,
@@ -52,7 +58,7 @@ class _GameScreenState extends State<GameScreen> {
       // Usamos el color celeste del tema
       backgroundColor: Colors.blue.shade50, 
       appBar: AppBar(
-        title: const Text('Memorys den'),
+        title: const Text("Memory's Den"),
         actions: [
           // Botón para reiniciar (útil para pruebas)
           IconButton(
@@ -61,39 +67,93 @@ class _GameScreenState extends State<GameScreen> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(12.0),
-        // GridView: El componente mágico para hacer rejillas
-        child: GridView.builder(
-          // INSTRUCCIÓN CUMPLIDA: Grid 6x6
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 6, // 6 columnas
-            crossAxisSpacing: 8, // Espacio horizontal entre cartas
-            mainAxisSpacing: 8,  // Espacio vertical entre cartas
-            childAspectRatio: 0.8, // Las hace un poco más altas que anchas
+      
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: AspectRatio(
+            //Fuerza un tablero cuadrado
+            aspectRatio: 1,
+            child: GridView.builder(
+              // Bloqueamos el scroll porque va a caber perfecto
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 6, // 6 columnas
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: 1, //Cartas cuadradas
+              ),
+              itemCount: cards.length,
+              itemBuilder: (context, index) {
+                return _buildCardItem(index);
+              },
+            ),
           ),
-          itemCount: cards.length, // 36 items
-          itemBuilder: (context, index) {
-            return _buildCardItem(cards[index]);
-          },
         ),
       ),
     );
   }
 
+void _onCardTap(int index) {
+    // Si está pensando, o la carta ya está volteada/emparejada, no hacemos nada
+    if (isProcessing || cards[index].isFlipped || cards[index].isMatched) return;
+
+    setState(() {
+      cards[index].isFlipped = true; // Volteamos la carta
+      flippedIndices.add(index);     // La anotamos
+    });
+
+    // Si ya hay 2 cartas levantadas, verificamos
+    if (flippedIndices.length == 2) {
+      isProcessing = true; // Bloqueamos la pantalla
+      _checkForMatch();
+    }
+  }
+
+  void _checkForMatch() async {
+    // Esperamos 1 segundo
+    await Future.delayed(const Duration(seconds: 1));
+
+    int index1 = flippedIndices[0];
+    int index2 = flippedIndices[1];
+
+    // Comparamos el contenido
+    if (cards[index1].content == cards[index2].content) {
+      //SON PAREJA
+      setState(() {
+        cards[index1].isMatched = true;
+        cards[index2].isMatched = true;
+      });
+    } else {
+      // FALLASTE (Las escondemos)
+      setState(() {
+        cards[index1].isFlipped = false;
+        cards[index2].isFlipped = false;
+      });
+    }
+
+    // Limpiamos para el siguiente turno
+    flippedIndices.clear();
+    isProcessing = false;
+  }
+
   // Esta función dibuja cada cuadrito individual
-  Widget _buildCardItem(GameCard card) {
+  Widget _buildCardItem(int index) {
+    GameCard card = cards[index]; 
+
+    // PARTE 1: Decidimos el color con calma aquí arriba
+    Color cardColor;
+    if (card.isFlipped || card.isMatched) {
+      cardColor = Colors.white;
+    } else {
+      cardColor = Colors.lightBlue;
+    }
+
     return GestureDetector(
-      onTap: () {
-        // Lógica visual temporal: solo voltea la carta al tocarla
-        setState(() {
-          card.isFlipped = !card.isFlipped;
-        });
-      },
+      onTap: () => _onCardTap(index),
       child: Container(
         decoration: BoxDecoration(
-          // Si está volteada es Blanca, si no, es Celeste Fuerte
-          color: card.isFlipped ? Colors.white : Colors.lightBlue,
+          color: cardColor, // PARTE 2: Aquí solo usamos el resultado
           borderRadius: BorderRadius.circular(8),
           boxShadow: [
             BoxShadow(
@@ -104,9 +164,9 @@ class _GameScreenState extends State<GameScreen> {
           ],
         ),
         child: Center(
-          child: card.isFlipped
-              ? Text(card.content, style: const TextStyle(fontSize: 26)) // Muestra Emoji
-              : const SizedBox(), // No muestra nada si está boca abajo
+          child: (card.isFlipped || card.isMatched)
+              ? Text(card.content, style: const TextStyle(fontSize: 24))
+              : const SizedBox(),
         ),
       ),
     );

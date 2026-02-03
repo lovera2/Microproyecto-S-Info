@@ -14,7 +14,6 @@ class MemoryGameApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Flutter Memoria',
       theme: ThemeData(
-        // 1. CAMBIO AQUÍ: Para que el tema general sea azulito
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightBlue),
         useMaterial3: true,
       ),
