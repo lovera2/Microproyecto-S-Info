@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/game_card.dart'; // Importamos el molde
 import 'dart:async'; // lo utilizaremos para esperar 1 seg antes de voltear las cartas again 
+import 'package:shared_preferences/shared_preferences.dart'; //para guardar el mejor puntaje localmente
+
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -16,21 +18,24 @@ class _GameScreenState extends State<GameScreen> {
   List<int> flippedIndices = []; // Guarda cuáles cartas están boca arriba
   bool isProcessing = false;     // Bloquea la pantalla mientras espera
 
-  int attempts = 0;          // Contador de intentos
-  int matchedPairs = 0;      // Para saber cuándo llegamos a 18
-  int secondsElapsed = 0;    // El reloj
-  Timer? gameTimer;          // El motor del tiempo
-  bool gameStarted = false;  // Para que el tiempo no corra solo
+  int attempts=0;           // Contador de intentos
+  int matchedPairs=0;       // Para saber cuándo llegamos a 18
+  int secondsElapsed=0;     // El reloj
+  Timer? gameTimer;         // El motor del tiempo
+  bool gameStarted=false;   // Para que el tiempo no corra solo
+  int bestAttempts=0;       // Mejor intento guardado
+  int bestTime=0;           // Mejor tiempo guardado
 
   @override
   void initState() {
     super.initState();
     _initializeGame();
+    _loadHighScore();
   }
 
   // Lógica para preparar la partida
   void _initializeGame() {
-    // 1. Elegimos 18 emojis (Instrucción: 18 pares = 36 cartas)
+    // 1. Elegimos 18 emojis
     List<String> icons = [
       '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', 
       '🐻', '🐼', '🐨', '🐯', '🦁', '🐮',
@@ -65,6 +70,20 @@ class _GameScreenState extends State<GameScreen> {
     gameStarted = false;
     flippedIndices.clear();
     isProcessing = false;
+  }
+
+  Future<void> _loadHighScore() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      bestAttempts = prefs.getInt('bestAttempts') ?? 0;
+      bestTime = prefs.getInt('bestTime') ?? 0;
+    });
+  }
+
+  Future<void> _saveHighScore(int attemptsNow, int timeNow) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('bestAttempts', attemptsNow);
+    await prefs.setInt('bestTime', timeNow);
   }
 
   void startTimer() {
@@ -112,7 +131,25 @@ class _GameScreenState extends State<GameScreen> {
       // SISTEMA DE VICTORIA (18 parejas para un 6x6)
       if (matchedPairs == 18) {
         gameTimer?.cancel(); // Detenemos el reloj
-        _showVictoryDialog();
+
+        bool nuevoRecord=false;
+        if(bestAttempts==0){
+          nuevoRecord=true;
+        }else if(attempts<bestAttempts){
+          nuevoRecord=true;
+        }else if(attempts==bestAttempts && secondsElapsed<bestTime){
+          nuevoRecord=true;
+        }
+
+        if(nuevoRecord){
+          setState(() {
+            bestAttempts=attempts;
+            bestTime=secondsElapsed;
+          });
+          await _saveHighScore(bestAttempts, bestTime);
+        }
+
+        _showVictoryDialog(nuevoRecord);
       }
     } else {
       setState(() {
@@ -127,7 +164,7 @@ class _GameScreenState extends State<GameScreen> {
 
   // Aqui creamos la interfaz de usuario
 
-  void _showVictoryDialog() {
+  void _showVictoryDialog(bool nuevoRecord){
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -140,6 +177,12 @@ class _GameScreenState extends State<GameScreen> {
             const SizedBox(height: 10),
             Text("Intentos: $attempts", style: const TextStyle(fontWeight: FontWeight.bold)),
             Text("Tiempo: $secondsElapsed segundos", style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            Text(
+              nuevoRecord ? "¡Nuevo récord! 🏆" : "Récord actual: $bestAttempts intentos / ${bestTime}s",
+              style: const TextStyle(fontWeight: FontWeight.w600),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
         actions: [
@@ -160,7 +203,7 @@ class _GameScreenState extends State<GameScreen> {
     return Scaffold(
       backgroundColor: Colors.blue.shade50,
       appBar: AppBar(
-        title: const Text("Memory's Den"),
+        title: const Text("Juego de Memoria"),
         centerTitle: true,
         elevation: 2,
       ),
@@ -174,6 +217,11 @@ class _GameScreenState extends State<GameScreen> {
               children: [
                 _buildStatBox("Intentos", attempts.toString(), Icons.touch_app),
                 _buildStatBox("Tiempo", "${secondsElapsed}s", Icons.timer),
+                _buildStatBox(
+                  "Mejor",
+                  bestAttempts == 0 ? "-" : "$bestAttempts / ${bestTime}s",
+                  Icons.emoji_events,
+                ),
               ],
             ),
           ),
@@ -250,4 +298,10 @@ class _GameScreenState extends State<GameScreen> {
       ),
     );
   }
+
+  @override
+  void dispose() {
+    gameTimer?.cancel();
+    super.dispose();
+}
 }
