@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/game_card.dart'; // Importamos el molde
 import 'dart:async'; // lo utilizaremos para esperar 1 seg antes de voltear las cartas again 
+import 'dart:math' as math; //para animación 3D (flip)
 import 'package:shared_preferences/shared_preferences.dart'; //para guardar el mejor puntaje localmente
 
 
@@ -24,6 +25,7 @@ class _GameScreenState extends State<GameScreen> {
   bool gameStarted=false;   // Para que el tiempo no corra solo
   int bestAttempts=0;       // Mejor intento guardado
   int bestTime=0;           // Mejor tiempo guardado
+  Set<int> celebrando = {}; // Índices con efecto de celebración
 
   @override
   void initState() {
@@ -94,7 +96,7 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _onCardTap(int index) {
-    if (isProcessing || cards[index].isFlipped || cards[index].isMatched) return;
+    if (isProcessing || flippedIndices.length == 2 || cards[index].isFlipped || cards[index].isMatched) return;
 
     // Si es el primer click de la partida, arranca el cronómetro
     if (!gameStarted) {
@@ -125,6 +127,17 @@ class _GameScreenState extends State<GameScreen> {
         cards[index1].isMatched = true;
         cards[index2].isMatched = true;
         matchedPairs++;
+        celebrando.add(index1);
+        celebrando.add(index2);
+      });
+
+      //Manejo del efecto de brillo/celebración
+      Future.delayed(const Duration(seconds: 1), () {
+        if (!mounted) return;
+        setState(() {
+          celebrando.remove(index1);
+          celebrando.remove(index2);
+        });
       });
 
       // SISTEMA DE VICTORIA (18 parejas para un 6x6)
@@ -277,24 +290,95 @@ class _GameScreenState extends State<GameScreen> {
 
     return GestureDetector(
       onTap: () => _onCardTap(index),
-      child: Container(
-        decoration: BoxDecoration(
-          color: isVisible ? Colors.white : Colors.lightBlue,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
-              blurRadius: 4,
-              offset: const Offset(2, 2),
-            ),
-          ],
-        ),
-        child: Center(
-          child: isVisible
-              ? Text(card.content, style: const TextStyle(fontSize: 22))
-              : const SizedBox(),
-        ),
+      child: TweenAnimationBuilder<double>(
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeInOut,
+        tween: Tween<double>(begin: 0, end: isVisible ? 1 : 0),
+        builder: (context, value, child) {
+          final angle = value * math.pi;
+          final showingFront = value >= 0.5;
+
+          return Transform(
+            alignment: Alignment.center,
+            transform: Matrix4.identity()
+              ..setEntry(3, 2, 0.001) //generacion de perspectiva
+              ..rotateY(angle),
+            child: showingFront
+                ? _buildCardFront(card, celebrando.contains(index))
+                : _buildCardBack(),
+          );
+        },
       ),
+    );
+  }
+
+  Widget _buildCardBack() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.lightBlue,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 4,
+            offset: const Offset(2, 2),
+          ),
+        ],
+      ),
+      child: const Center(child: SizedBox()),
+    );
+  }
+
+  Widget _buildCardFront(GameCard card, bool glow) {
+
+    //Animación cuando una carta queda emparejada.
+    return TweenAnimationBuilder<double>(
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOut,
+      tween: Tween<double>(end: glow ? 1 : 0),
+      builder: (context, t, child) {
+        final scale = glow ? (1 + 0.06 * math.sin(t * math.pi)) : 1.0;
+
+        return Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()
+            ..rotateY(math.pi)
+            ..scale(scale),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: glow
+                  ? Border.all(color: Colors.green, width: 2)
+                  : null,
+              boxShadow: [
+                // Sombra normal
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 4,
+                  offset: const Offset(2, 2),
+                ),
+                if (glow)
+                  BoxShadow(
+                    color: Colors.green.withValues(alpha: 0.55),
+                    blurRadius: 16,
+                    spreadRadius: 1,
+                  ),
+              ],
+            ),
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  card.content,
+                  style: const TextStyle(fontSize: 36),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
