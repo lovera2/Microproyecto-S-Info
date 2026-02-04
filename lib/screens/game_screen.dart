@@ -8,7 +8,6 @@ class GameScreen extends StatefulWidget {
   @override
   State<GameScreen> createState() => _GameScreenState();
 }
-
 class _GameScreenState extends State<GameScreen> {
   // Aquí guardaremos las 36 cartas en memoria
   List<GameCard> cards = [];
