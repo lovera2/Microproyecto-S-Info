@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../models/game_card.dart'; // Importamos el molde
 import 'dart:async'; // lo utilizaremos para esperar 1 seg antes de voltear las cartas again 
-import 'dart:math' as math; //para animación 3D (flip)
+import 'dart:math' as math; // para animación 3D (flip)
 import 'dart:convert'; // para guardar historial como JSON
-import 'package:shared_preferences/shared_preferences.dart'; //para guardar el mejor puntaje localmente
+import 'package:shared_preferences/shared_preferences.dart'; // para guardar el mejor puntaje localmente
 
 
 class GameScreen extends StatefulWidget {
@@ -15,9 +15,11 @@ class GameScreen extends StatefulWidget {
   State<GameScreen> createState() => _GameScreenState();
 }
 class _GameScreenState extends State<GameScreen> {
-  // Aquí guardaremos las 36 cartas en memoria
+
+// VARIABLES PARA LÓGICA DEL JUEGO
+
   List<GameCard> cards = [];
-// Variables para la lógica del juego
+
   List<int> flippedIndices = []; // Guarda cuáles cartas están boca arriba
   bool isProcessing = false;     // Bloquea la pantalla mientras espera
 
@@ -33,10 +35,33 @@ class _GameScreenState extends State<GameScreen> {
   //Historial
   static const String _historyKey = 'gameHistory';
 
+  @override
+  void initState() {
+    super.initState();
+    _initializeGame();
+    _loadHighScore();
+  }
+
+//Carga de record (high score)
+
+  Future<void> _loadHighScore() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      bestAttempts = prefs.getInt('bestAttempts') ?? 0;
+      bestTime = prefs.getInt('bestTime') ?? 0;
+    });
+  }
+
+  Future<void> _saveHighScore(int attemptsNow, int timeNow) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('bestAttempts', attemptsNow);
+    await prefs.setInt('bestTime', timeNow);
+  }
+
   Future<void> _addToHistory() async {
     final prefs = await SharedPreferences.getInstance();
 
-    //Lectura d historial
+    //Lectura de historial
     final raw = prefs.getString(_historyKey);
     List<dynamic> list = [];
     if (raw != null && raw.trim().isNotEmpty) {
@@ -56,19 +81,12 @@ class _GameScreenState extends State<GameScreen> {
 
     list.insert(0, entry); //más reciente primero
 
-    //limite de 50 partidas 
+    //Limite de 50 partidas 
     if (list.length > 50) {
       list = list.take(50).toList();
     }
 
     await prefs.setString(_historyKey, jsonEncode(list));
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeGame();
-    _loadHighScore();
   }
 
   // Lógica para preparar la partida
@@ -109,20 +127,6 @@ class _GameScreenState extends State<GameScreen> {
     flippedIndices.clear();
     celebrando.clear();
     isProcessing = false;
-  }
-
-  Future<void> _loadHighScore() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      bestAttempts = prefs.getInt('bestAttempts') ?? 0;
-      bestTime = prefs.getInt('bestTime') ?? 0;
-    });
-  }
-
-  Future<void> _saveHighScore(int attemptsNow, int timeNow) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('bestAttempts', attemptsNow);
-    await prefs.setInt('bestTime', timeNow);
   }
 
   void startTimer() {
@@ -178,7 +182,7 @@ class _GameScreenState extends State<GameScreen> {
         });
       });
 
-      // SISTEMA DE VICTORIA (18 parejas para un 6x6)
+      // Sistema de victoria (18 parejas para un 6x6)
       if (matchedPairs == 18) {
         gameTimer?.cancel(); // Detenemos el reloj
 
@@ -215,7 +219,7 @@ class _GameScreenState extends State<GameScreen> {
     isProcessing = false;
   }
 
-  // Aqui creamos la interfaz de usuario
+  // Manejo de interfaz del usuario
 
   void _showVictoryDialog(bool nuevoRecord){
     showDialog(
@@ -284,44 +288,57 @@ class _GameScreenState extends State<GameScreen> {
         children: [
           const _EmojiBackground(),
           SafeArea(
-            child: Column(
-              children: [
-                // FILA DE ESTADÍSTICAS
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildStatBox("Intentos", attempts.toString(), Icons.touch_app),
-                      _buildStatBox("Tiempo", "${secondsElapsed}s", Icons.timer),
-                      _buildStatBox(
-                        "Mejor",
-                        bestAttempts == 0 ? "-" : "$bestAttempts / ${bestTime}s",
-                        Icons.emoji_events,
-                      ),
-                    ],
-                  ),
-                ),
-                // TABLERO
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: AspectRatio(
-                      aspectRatio: 1,
-                      child: GridView.builder(
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 6,
-                          crossAxisSpacing: 8,
-                          mainAxisSpacing: 8,
-                        ),
-                        itemCount: cards.length,
-                        itemBuilder: (context, index) => _buildCardItem(index),
+            // daptacion segun ancho de pantallas 
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final w = constraints.maxWidth;
+
+                // Ajustes para pantallas pequeñas vs grandes 
+                final double statsPadding = w < 420 ? 10 : 16;
+                final double boardPadding = w < 420 ? 8 : 12;
+                final double spacing = w < 420 ? 6 : 8;
+
+                return Column(
+                  children: [
+                    // Fila de indicadores/contadores
+                    Padding(
+                      padding: EdgeInsets.all(statsPadding),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildStatBox("Intentos", attempts.toString(), Icons.touch_app),
+                          _buildStatBox("Tiempo", "${secondsElapsed}s", Icons.timer),
+                          _buildStatBox(
+                            "Mejor",
+                            bestAttempts == 0 ? "-" : "$bestAttempts / ${bestTime}s",
+                            Icons.emoji_events,
+                          ),
+                        ],
                       ),
                     ),
-                  ),
-                ),
-              ],
+
+                    // Tablero
+                    Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.all(boardPadding),
+                        child: AspectRatio(
+                          aspectRatio: 1,
+                          child: GridView.builder(
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 6,
+                              crossAxisSpacing: spacing,
+                              mainAxisSpacing: spacing,
+                            ),
+                            itemCount: cards.length,
+                            itemBuilder: (context, index) => _buildCardItem(index),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],
@@ -369,7 +386,7 @@ class _GameScreenState extends State<GameScreen> {
           return Transform(
             alignment: Alignment.center,
             transform: Matrix4.identity()
-              ..setEntry(3, 2, 0.001) //generacion de perspectiva
+              ..setEntry(3, 2, 0.001) // Generacion de perspectiva
               ..rotateY(angle),
             child: showingFront
                 ? _buildCardFront(card, celebrando.contains(index))
@@ -399,7 +416,7 @@ class _GameScreenState extends State<GameScreen> {
 
   Widget _buildCardFront(GameCard card, bool glow) {
 
-    //Animación cuando una carta queda emparejada.
+    // Animación cuando una carta queda emparejada.
     return TweenAnimationBuilder<double>(
       duration: const Duration(milliseconds: 420),
       curve: Curves.easeOut,
@@ -450,13 +467,15 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
+// Adicion de dispose/eliminar pantalla
   @override
   void dispose() {
     gameTimer?.cancel();
     super.dispose();
-}
+  } 
 }
 
+// Manejo de diseño / fondo de pantalla
 class _EmojiBackground extends StatelessWidget {
   const _EmojiBackground();
 
@@ -471,7 +490,7 @@ class _EmojiBackground extends StatelessWidget {
         final width = constraints.maxWidth;
         final height = constraints.maxHeight;
 
-        // Tamaño de “celda” del patrón (ajustable)
+        // Tamaño de celda del patrón (ajustable)
         const cell = 56.0;
         final cols = (width / cell).floor().clamp(6, 40);
         final rows = (height / cell).ceil().clamp(8, 60);

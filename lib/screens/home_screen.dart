@@ -10,6 +10,9 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
+// Historial
+
+// Key donde guardo/leo el historial
 class _HomeScreenState extends State<HomeScreen> {
   static const String historyKey = 'gameHistory';
   List<Map<String, dynamic>> history = [];
@@ -18,6 +21,17 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     loadHistory();
+  }
+
+  // Formatea fecha legible
+  String prettyDate(String iso) {
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      String two(int n) => n.toString().padLeft(2, '0');
+      return '${two(dt.day)}/${two(dt.month)}/${dt.year} ${two(dt.hour)}:${two(dt.minute)}';
+    } catch (_) {
+      return iso;
+    }
   }
 
   Future<void> loadHistory() async {
@@ -29,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
+    // Manejo de errores
     try {
       final list = jsonDecode(raw) as List<dynamic>;
       final parsed = <Map<String, dynamic>>[];
@@ -51,6 +66,9 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => history = []);
   }
 
+  // Juego
+
+  // Pide nombre y empieza el juego
   Future<void> startGame() async {
     final name = await askPlayerName();
     if (!mounted || name == null) return;
@@ -60,7 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(builder: (_) => GameScreen(playerName: name)),
     );
 
-    await loadHistory(); // refrescar al volver
+    await loadHistory(); // refrescar historial al volver
   }
 
   Future<String?> askPlayerName() async {
@@ -101,16 +119,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  String prettyDate(String iso) {
-    try {
-      final dt = DateTime.parse(iso).toLocal();
-      String two(int n) => n.toString().padLeft(2, '0');
-      return '${two(dt.day)}/${two(dt.month)}/${dt.year} ${two(dt.hour)}:${two(dt.minute)}';
-    } catch (_) {
-      return iso;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -118,7 +126,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: Colors.blue.shade50,
       appBar: AppBar(
-        title: const Text('Juego de Memoria'),
+        title: const Text('Microproyecto de Sist. de Información'),
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
@@ -172,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   constraints: BoxConstraints(minHeight: viewport.maxHeight),
                   child: Stack(
                     children: [
-                      // Fondo con “pattern” suave de emojis (tema animales)
+                      // Fondo de emojis
                       Positioned.fill(
                         child: IgnorePointer(
                           child: Opacity(
@@ -180,18 +188,13 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: LayoutBuilder(
                               builder: (context, constraints) {
                                 const emojis = ['🐶', '🐱', '🐻', '🐼', '🦊', '🐸', '🐵', '🐧'];
-
-                                // Estimación de “celda” para decidir cuántos emojis pintar
                                 const double fontSize = 22;
                                 const double spacing = 18;
                                 final double cellW = fontSize + spacing;
                                 final double cellH = fontSize + spacing;
-
-                                // +2 para evitar huecos al final por redondeos y padding
                                 final int cols = (constraints.maxWidth / cellW).ceil() + 2;
                                 final int rows = (constraints.maxHeight / cellH).ceil() + 2;
                                 final int total = (cols * rows).clamp(120, 2000);
-
                                 return Padding(
                                   padding: const EdgeInsets.all(18),
                                   child: Wrap(
@@ -221,7 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                // HERO / HEADER
+                                // Header
                                 Card(
                                   elevation: 0,
                                   color: Colors.white.withValues(alpha: 0.9),
@@ -261,8 +264,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           ),
                                         ),
                                         const SizedBox(height: 14),
-
-                                        // BOTÓN PRINCIPAL
+                                        // Botón principal
                                         SizedBox(
                                           width: 360,
                                           child: FilledButton.icon(
@@ -281,10 +283,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                             ),
                                           ),
                                         ),
-
                                         const SizedBox(height: 10),
-
-                                        // Chip pequeño de “tip” (bonito y compacto)
+                                        // Tip
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                           decoration: BoxDecoration(
@@ -301,10 +301,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ),
                                   ),
                                 ),
-
                                 const SizedBox(height: 14),
-
-                                // CÓMO JUGAR
+                                // Cómo jugar
                                 Card(
                                   elevation: 0,
                                   color: Colors.white.withValues(alpha: 0.9),
@@ -345,10 +343,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ],
                                   ),
                                 ),
-
                                 const SizedBox(height: 18),
-
-                                // HISTORIAL (centrado y con mejor lectura)
+                                // Historial
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
@@ -375,7 +371,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ],
                                 ),
                                 const SizedBox(height: 10),
-
                                 if (history.isEmpty)
                                   Card(
                                     elevation: 0,
@@ -422,7 +417,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                       final attempts = (h['attempts'] ?? 0).toString();
                                       final time = (h['time'] ?? 0).toString();
                                       final date = (h['date'] ?? '').toString();
-
                                       return Card(
                                         elevation: 0,
                                         color: Colors.white.withValues(alpha: 0.95),
@@ -473,6 +467,28 @@ class _HomeScreenState extends State<HomeScreen> {
                                       );
                                     },
                                   ),
+
+                                const SizedBox(height: 18),
+
+                                // Créditos
+                                Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.75),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      'Elaborado por: María Victoria Almonte - Luis Mariano Lovera - Sebastián Marval',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
                           ),

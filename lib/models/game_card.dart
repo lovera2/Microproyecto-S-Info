@@ -1,3 +1,5 @@
+//Modelo de la carta del juego
+
 class GameCard {
   final int id;
   final String content; 
